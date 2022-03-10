@@ -1,0 +1,7 @@
+# Directories
+.vscode
+build
+
+# Test files
+sample_*
+output
