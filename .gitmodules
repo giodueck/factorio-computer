@@ -1,0 +1,6 @@
+[submodule "submodule/json-parser"]
+	path = submodule/json-parser
+	url = https://github.com/json-parser/json-parser.git
+[submodule "submodule/zlib"]
+	path = submodule/zlib
+	url = https://github.com/madler/zlib.git
