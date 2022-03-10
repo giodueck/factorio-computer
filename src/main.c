@@ -3,7 +3,7 @@
 #include <string.h>
 
 #include "base64.h"
-#include "json.h"
+#include <json-parser/json.h>
 
 int main(int argc, char *argv[])
 {
