@@ -3,5 +3,5 @@
 build
 
 # Test files
-sample_*
-output
+sample*
+output*

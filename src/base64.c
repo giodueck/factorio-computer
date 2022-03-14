@@ -108,3 +108,8 @@ char *b64_decode(const unsigned char *in, int len)
 
     return out;
 }
+
+char *bps_decode(const unsigned char *in, int len)
+{
+    return b64_decode(in + sizeof(char), len - 1);
+}

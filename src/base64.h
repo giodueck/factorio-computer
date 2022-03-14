@@ -11,4 +11,6 @@ char* b64_encode(const unsigned char* in, int len);
 
 char* b64_decode(const unsigned char* in, int len);
 
+char *bps_decode(const unsigned char *in, int len);
+
 #endif // BASE64_H
