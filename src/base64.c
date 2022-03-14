@@ -1,9 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <zlib/zlib.h>
 
 #include "base64.h"
+#include "zhelpers.h"
 
+const char tempfilename[] = "output.tmp";
 const char b64_chars[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 int b64_encoded_size(int inlen)
@@ -112,4 +116,137 @@ char *b64_decode(const unsigned char *in, int len)
 char *bps_decode(const unsigned char *in, int len)
 {
     return b64_decode(in + sizeof(char), len - 1);
+}
+
+int bps_to_json(const unsigned char *filename_in, const unsigned char *filename_out)
+{
+    FILE *fp, *fouttmp, *fout;
+    struct stat filestatus;
+    int file_size;
+    char *file_contents;
+    char *out;
+    int ret;
+
+    // BASE 64 DECODE BLUEPRINT STRING INTO A BINARY FILE
+    if (stat(filename_in, &filestatus) != 0)
+    {
+        fprintf(stderr, "File %s not found\n", filename_in);
+        return 1;
+    }
+    file_size = filestatus.st_size;
+    file_contents = (char *)malloc(filestatus.st_size);
+    if (file_contents == NULL)
+    {
+        fprintf(stderr, "Memory error: unable to allocate %d bytes\n", file_size);
+        return 1;
+    }
+
+    fp = fopen(filename_in, "rt");
+    if (fp == NULL)
+    {
+        fprintf(stderr, "Unable to open %s\n", filename_in);
+        fclose(fp);
+        free(file_contents);
+        return 1;
+    }
+    if (fread(file_contents, file_size, 1, fp) != 1)
+    {
+        fprintf(stderr, "Unable to read content of %s\n", filename_in);
+        fclose(fp);
+        free(file_contents);
+        return 1;
+    }
+    fclose(fp);
+
+    out = bps_decode(file_contents, file_size);
+    fouttmp = fopen(tempfilename, "wb");
+    fwrite(out, 1, b64_decoded_size(file_size - 1), fouttmp);
+    fclose(fouttmp);
+    free(file_contents);
+
+    // INFLATE DECODED BINARY
+    fouttmp = fopen(tempfilename, "rb");
+    if (fouttmp == NULL)
+    {
+        fprintf(stderr, "Unable to create temporary file %s\n", tempfilename);
+        fclose(fouttmp);
+        return 1;
+    }
+    fout = fopen(filename_out, "wb");
+    if (fout == NULL)
+    {
+        fprintf(stderr, "Unable to open %s\n", filename_out);
+        fclose(fout);
+        fclose(fouttmp);
+        remove(tempfilename);
+        return 1;
+    }
+    ret = inf(fouttmp, fout);
+    if (ret != Z_OK)
+        zerr(ret);
+    fclose(fouttmp);
+    remove(tempfilename);
+    return ret;
+}
+
+int bps_to_json_stdout(const unsigned char *filename_in)
+{
+    FILE *fp, *fouttmp;
+    struct stat filestatus;
+    int file_size;
+    char *file_contents;
+    char *out;
+    int ret;
+
+    // BASE 64 DECODE BLUEPRINT STRING INTO A BINARY FILE
+    if (stat(filename_in, &filestatus) != 0)
+    {
+        fprintf(stderr, "File %s not found\n", filename_in);
+        return 1;
+    }
+    file_size = filestatus.st_size;
+    file_contents = (char *)malloc(filestatus.st_size);
+    if (file_contents == NULL)
+    {
+        fprintf(stderr, "Memory error: unable to allocate %d bytes\n", file_size);
+        return 1;
+    }
+
+    fp = fopen(filename_in, "rt");
+    if (fp == NULL)
+    {
+        fprintf(stderr, "Unable to open %s\n", filename_in);
+        fclose(fp);
+        free(file_contents);
+        return 1;
+    }
+    if (fread(file_contents, file_size, 1, fp) != 1)
+    {
+        fprintf(stderr, "Unable to read content of %s\n", filename_in);
+        fclose(fp);
+        free(file_contents);
+        return 1;
+    }
+    fclose(fp);
+
+    out = bps_decode(file_contents, file_size);
+    fouttmp = fopen(tempfilename, "wb");
+    fwrite(out, 1, b64_decoded_size(file_size - 1), fouttmp);
+    fclose(fouttmp);
+    free(file_contents);
+
+    // INFLATE DECODED BINARY
+    fouttmp = fopen(tempfilename, "rb");
+    if (fouttmp == NULL)
+    {
+        fprintf(stderr, "Unable to create temporary file %s\n", tempfilename);
+        fclose(fouttmp);
+        return 1;
+    }
+    ret = inf(fouttmp, stdout);
+    if (ret != Z_OK)
+        zerr(ret);
+    fclose(fouttmp);
+    remove(tempfilename);
+    return ret;
 }
