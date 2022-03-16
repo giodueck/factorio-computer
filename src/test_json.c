@@ -27,7 +27,7 @@
  * SUCH DAMAGE.
  */
 
-#include "json.h"
+#include <json-parser/json.h>
 
 #include <stdio.h>
 #include <stdlib.h>

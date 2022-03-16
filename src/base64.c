@@ -48,6 +48,7 @@ char *b64_encode(const unsigned char *in, int len)
     for (int i = 0; i < len; i += 3)
     {
         triplet = in[i] << 16;
+        pad = 0;
         if ((i + 1) < len)
         {
             triplet += in[i + 1] << 8;
@@ -118,6 +119,19 @@ char *bps_decode(const unsigned char *in, int len)
     return b64_decode(in + sizeof(char), len - 1);
 }
 
+char *bps_encode(const unsigned char *in, int len)
+{
+    char *encoded = b64_encode(in, len);
+    char *encoded_bps;
+
+    encoded_bps = (char*)malloc((strlen(encoded) + 1) * sizeof(char));
+    encoded_bps[0] = VERSION_BYTE;
+    encoded_bps[1] = '\0';
+    strcat(encoded_bps, encoded);
+    free(encoded);
+    return encoded_bps;
+}
+
 int bps_to_json(const unsigned char *filename_in, const unsigned char *filename_out)
 {
     FILE *fp, *fouttmp, *fout;
@@ -163,6 +177,7 @@ int bps_to_json(const unsigned char *filename_in, const unsigned char *filename_
     fwrite(out, 1, b64_decoded_size(file_size - 1), fouttmp);
     fclose(fouttmp);
     free(file_contents);
+    free(out);
 
     // INFLATE DECODED BINARY
     fouttmp = fopen(tempfilename, "rb");
@@ -231,15 +246,23 @@ int bps_to_json_stdout(const unsigned char *filename_in)
 
     out = bps_decode(file_contents, file_size);
     fouttmp = fopen(tempfilename, "wb");
+    if (fouttmp == NULL)
+    {
+        fprintf(stderr, "Unable to create temporary file %s\n", tempfilename);
+        fclose(fouttmp);
+        free(file_contents);
+        return 1;
+    }
     fwrite(out, 1, b64_decoded_size(file_size - 1), fouttmp);
     fclose(fouttmp);
     free(file_contents);
+    free(out);
 
     // INFLATE DECODED BINARY
     fouttmp = fopen(tempfilename, "rb");
     if (fouttmp == NULL)
     {
-        fprintf(stderr, "Unable to create temporary file %s\n", tempfilename);
+        fprintf(stderr, "Unable to open temporary file %s\n", tempfilename);
         fclose(fouttmp);
         return 1;
     }
@@ -249,4 +272,148 @@ int bps_to_json_stdout(const unsigned char *filename_in)
     fclose(fouttmp);
     remove(tempfilename);
     return ret;
+}
+
+int json_to_bps(const unsigned char *filename_in, const unsigned char *filename_out)
+{
+    FILE *fp, *fouttmp, *fout;
+    struct stat filestatus;
+    int ret;
+    char *file_contents, *out;
+    int file_size;
+
+    // DEFLATE JSON FILE
+    if (stat(filename_in, &filestatus) != 0)
+    {
+        fprintf(stderr, "File %s not found\n", filename_in);
+        return 1;
+    }
+    fp = fopen(filename_in, "rt");
+    if (fp == NULL)
+    {
+        fprintf(stderr, "Unable to open %s\n", filename_in);
+        fclose(fp);
+        return 1;
+    }
+
+    fouttmp = fopen(tempfilename, "wb");
+    if (fouttmp == NULL)
+    {
+        fprintf(stderr, "Unable to create temporary file %s\n", tempfilename);
+        fclose(fouttmp);
+        fclose(fp);
+        return 1;
+    }
+
+    ret = def(fp, fouttmp, 9);
+    if (ret != Z_OK)
+    {
+        zerr(ret);
+        return ret;
+    }
+    fclose(fouttmp);
+    fclose(fp);
+
+    // B64 ENCODE RESULTING BINARY
+    if (stat(tempfilename, &filestatus) != 0)
+    {
+        fprintf(stderr, "File %s not found\n", tempfilename);
+        return 1;
+    }
+    file_size = filestatus.st_size;
+    file_contents = (char *)malloc(filestatus.st_size);
+    fouttmp = fopen(tempfilename, "rb");
+    if (fouttmp == NULL)
+    {
+        fprintf(stderr, "Unable to open temporary file %s\n", tempfilename);
+        fclose(fouttmp);
+        return 1;
+    }
+    if (fread(file_contents, file_size, 1, fouttmp) != 1)
+    {
+        fprintf(stderr, "Unable to read content of %s\n", tempfilename);
+        fclose(fouttmp);
+        free(file_contents);
+        return 1;
+    }
+    fclose(fouttmp);
+
+    out = bps_encode(file_contents, file_size);
+    fout = fopen(filename_out, "wt");
+    fwrite(out, 1, b64_encoded_size(file_size) + 1, fout);
+    fclose(fout);
+    free(file_contents);
+    free(out);
+    remove(tempfilename);
+}
+
+int json_to_bps_stdout(const unsigned char *filename_in)
+{
+    FILE *fp, *fouttmp, *fout;
+    struct stat filestatus;
+    int ret;
+    char *file_contents, *out;
+    int file_size;
+
+    // DEFLATE JSON FILE
+    if (stat(filename_in, &filestatus) != 0)
+    {
+        fprintf(stderr, "File %s not found\n", filename_in);
+        return 1;
+    }
+    fp = fopen(filename_in, "rb");
+    if (fp == NULL)
+    {
+        fprintf(stderr, "Unable to open %s\n", filename_in);
+        fclose(fp);
+        return 1;
+    }
+
+    fouttmp = fopen(tempfilename, "wb");
+    if (fouttmp == NULL)
+    {
+        fprintf(stderr, "Unable to create temporary file %s\n", tempfilename);
+        fclose(fouttmp);
+        fclose(fp);
+        return 1;
+    }
+
+    ret = def(fp, fouttmp, 9);
+    if (ret != Z_OK)
+    {
+        zerr(ret);
+        return ret;
+    }
+    fclose(fouttmp);
+    fclose(fp);
+
+    // B64 ENCODE RESULTING BINARY
+    if (stat(tempfilename, &filestatus) != 0)
+    {
+        fprintf(stderr, "File %s not found\n", tempfilename);
+        return 1;
+    }
+    file_size = filestatus.st_size;
+    file_contents = (char *)malloc(filestatus.st_size);
+    fouttmp = fopen(tempfilename, "rb");
+    if (fouttmp == NULL)
+    {
+        fprintf(stderr, "Unable to open temporary file %s\n", tempfilename);
+        fclose(fouttmp);
+        return 1;
+    }
+    if (fread(file_contents, file_size, 1, fouttmp) != 1)
+    {
+        fprintf(stderr, "Unable to read content of %s\n", tempfilename);
+        fclose(fouttmp);
+        free(file_contents);
+        return 1;
+    }
+    fclose(fouttmp);
+
+    out = bps_encode(file_contents, file_size);
+    printf("%s\n", out);
+    free(file_contents);
+    free(out);
+    remove(tempfilename);
 }
